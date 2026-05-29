@@ -1,7 +1,7 @@
 ---
 name: remotion-video
 description: "Generate a Cantonese voiceover MP4 video from a script using Remotion + macOS TTS. Trigger: remotion video/mp4/generate video from code/react animation/video composition/cantonese 粵語"
-version: 1.10.0
+version: 1.11.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -1596,6 +1596,208 @@ for m in text_problems:
     if not ch.startswith('<'):
         print(f'Possible missing > at pos {m.start()}: {repr(content[m.start()-5:m.end()+10])}')
 ```
+
+
+
+## ⚠️ LLM Laziness Prevention — Deterministic SVG Triggers (2026-05-30)
+
+> **"SVG 庫有定義但無被調用"** — User caught the AI defining rich SVG components (Road, ZebraCrossing, CarSVG, PedestrianGroup) but NOT calling them in scene JSX. LLM cuts corners when generating 23 scenes in one pass.
+
+**4-FORCE SYSTEM to eliminate LLM laziness:**
+
+### 1. Hard-Mapping: Theme → Mandatory SVG Components
+
+> ⚠️ **SVG 調用強制規則 (CRITICAL):** Based on `seg.theme`, you MUST call the corresponding SVG components. Each scene MUST contain at least 2 matching SVG components. Do NOT use only `<div>` circles as substitutes.
+
+| seg.theme | Mandatory SVG Calls (at least 2) |
+|-----------|----------------------------------|
+| `intro` | `<IconGlobe/>`, `<IconShield/>` |
+| `problem` | `<IconAlert/>`, `<IconUsers/>` |
+| `tech` / `ai` | `<IconActivity/>`, `<IconZap/>` |
+| `security` | `<IconLock/>`, `<IconShield/>` |
+| `speed` | `<Road/>`, `<CarSVG/>`, `<SpeedGauge/>`, `<IconCar/>` |
+| `infrastructure` / `hk` | `<ZebraCrossing/>`, `<PedestrianGroup/>`, `<Road/>` |
+| `global` / `apac` | `<IconGlobe/>`, `<IconBuilding/>` |
+| `monitor` / `support` | `<IconActivity/>`, `<IconTimer/>` |
+| `protocol` | `<IconGlobe/>`, `<IconMail/>` |
+| `ech` / `open` | `<IconLock/>`, `<IconShield/>` |
+| `price` | `<IconDollar/>`, `<ChartBars/>` |
+| `multi` | `<IconUsers/>`, `<IconPhone/>` |
+| `promo` | `<IconStar/>`, `<IconZap/>` |
+| `cta` | `<IconZap/>`, `<IconActivity/>` |
+| `memorial` | `<CandleFlame/>`, `<RippleEffect/>` |
+| `legal` | `<Gavel/>` |
+| `phone` | `<PhoneIcon/>` |
+| `default` | `<RippleEffect/>`, `<IconActivity/>` |
+
+### 2. Forced SVG Slots in Scene Template
+
+> ⚠️ **Do NOT use a generic SceneBase for everything.** Each scene must have its OWN visual identity matching its theme. The template below is MANDATORY — do not skip Layer 5 (SVG layer).
+
+```tsx
+const SceneN: React.FC<{seg: typeof SEGMENTS[0]}> = ({seg}) => {
+  const frame = useCurrentFrame();
+  const durF = seg.durF;
+  const progress = interpolate(frame, [0, durF], [0, 1], {extrapolateRight: "clamp"});
+
+  // Theme-specific SVG determination (DO NOT skip this block)
+  const renderThemeSVG = () => {
+    switch (seg.theme) {
+      case "speed":
+        return (
+          <>
+            <Road y={540} />
+            <CarSVG x={100} y={480} scale={0.9} color={AMBER} />
+            <CarSVG x={400} y={480} scale={0.85} color={EMERALD} />
+            <CarSVG x={700} y={480} scale={0.8} color={AMBER} />
+          </>
+        );
+      case "infrastructure":
+      case "hk":
+        return (
+          <>
+            <ZebraCrossing y={540} />
+            <PedestrianGroup count={4} />
+          </>
+        );
+      case "memorial":
+        return (
+          <>
+            <CandleFlame x={500} y={380} size={80} progress={progress} />
+            <CandleFlame x={600} y={390} size={60} progress={progress} />
+            <CandleFlame x={700} y={380} size={70} progress={progress} />
+          </>
+        );
+      case "phone":
+        return <PhoneIcon progress={progress} />;
+      case "legal":
+        return <Gavel progress={progress} />;
+      case "tech":
+      case "ai":
+        return (
+          <>
+            <IconActivity />
+            <IconZap />
+          </>
+        );
+      default:
+        return (
+          <>
+            <IconGlobe />
+            <IconShield />
+          </>
+        );
+    }
+  };
+
+  return (
+    <AbsoluteFill style={{ background: DARK }}>
+      <FloatingParticles count={25} color={AMBER} />
+
+      {/* Layer 5: MANDATORY SVG layer — each scene must have matching SVG components */}
+      <div style={{ position: "absolute", inset: 0 }}>
+        {renderThemeSVG()}
+      </div>
+
+      {/* Text content — driven by seg.text */}
+      <div style={{ textAlign: "center", opacity: Math.min(1, frame / 15) }}>
+        {/* ... text elements using seg.text ... */}
+      </div>
+
+      {/* Caption */}
+      <div style={{ position: "absolute", bottom: 30, left: 0, right: 0, textAlign: "center" }}>
+        <div style={{
+          display: "inline-block",
+          padding: "6px 16px",
+          background: MID,
+          borderRadius: 8,
+          border: `1px solid ${AMBER}`,
+          fontSize: 13,
+          color: LIGHT,
+          maxWidth: 700,
+        }}>
+          {seg.text}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+```
+
+### 3. No Static SVG — Progress Must Be Bound
+
+> ⚠️ **CRITICAL (repeat after every Scene function):** All SVG coordinate/progress attributes MUST be bound to `interpolate()` results. Never write static `<CarSVG x={100} y={200} />` without animation. If a component accepts `progress`, pass an interpolated value. If it accepts `x`/`y`, these should be calculated from `frame`.
+
+**Correct:**
+```tsx
+const carX = interpolate(frame, [0, durF], [100, 400]);
+const carY = interpolate(frame, [0, durF], [480, 480]);
+<CarSVG x={carX} y={carY} scale={0.9} color={AMBER} />
+<PulseRing cx={640} cy={360} progress={progress} maxR={200} />
+```
+
+**WRONG (will not animate):**
+```tsx
+<CarSVG x={100} y={480} />  // static position, no animation
+```
+
+### 4. Pre-Render SVG Audit Script (BLOCKS render if SVG missing)
+
+> ⚠️ **This script MUST return all ✅ before any render.** If any scene shows ❌, fix the scene before proceeding.
+
+```python
+python3 << 'EOF'
+import re
+
+with open("src/Composition.tsx") as f:
+    content = f.read()
+
+# SVG components that MUST appear in at least some scenes
+# NOT all scenes need all SVGs, but every scene MUST call >=2 SVG components
+required_svgs = [
+    'SpeedGauge', 'CandleFlame', 'RippleEffect', 'Road',
+    'ZebraCrossing', 'PedestrianGroup', 'CarSVG', 'Gavel',
+    'PhoneIcon', 'IconGlobe', 'IconShield', 'IconAlert',
+    'IconActivity', 'IconZap', 'IconLock', 'IconUsers',
+    'IconStar', 'IconDollar'
+]
+
+scene_pattern = r'const (Scene\d+): React\.FC.*?\{(.*?)(?=
+const |
+\}(?:
+const |$))'
+matches = re.findall(scene_pattern, content, re.DOTALL)
+
+failed = 0
+for name, body in matches:
+    used = [svg for svg in required_svgs if f'<{svg}' in body or f'{svg}(' in body]
+    if len(used) < 2:
+        print(f"❌ {name}: ONLY {len(used)} SVG calls — NEED at least 2")
+        failed += 1
+    else:
+        print(f"✅ {name}: {len(used)} SVG calls — {', '.join(used[:4])}")
+
+if failed > 0:
+    print(f"
+⚠️  BLOCKED: {failed} scenes need SVG fixes before render!")
+else:
+    print(f"
+✅ ALL scenes passed SVG audit — ready to render")
+EOF
+```
+
+### 5. Chunking: Max 5 Scenes Per Generation Block
+
+> ⚠️ **When writing Scene JSX, NEVER generate all 23 scenes in one pass.** LLM degradation at scene 15+ causes SVG abandonment. Write maximum 5 scenes per block, wait for confirmation, then continue.
+
+**Correct workflow:**
+1. Generate Scene0–Scene4 → wait for "繼續"
+2. Generate Scene5–Scene9 → wait for "繼續"
+3. Continue until Scene22
+4. Only then run pre-render audit
+
+**Prompt for each chunk:**
+> "Write SceneN through SceneM (5 scenes) in Composition.tsx. Each scene MUST match its theme: call the mandatory SVG components from the mapping table. Do NOT use generic SceneBase for every scene — give each scene its OWN visual identity."
 
 ## Communication Protocol
 
