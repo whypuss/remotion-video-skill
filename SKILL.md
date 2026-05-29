@@ -1,7 +1,7 @@
 ---
 name: remotion-video
 description: "Generate a Cantonese voiceover MP4 video from a script using Remotion + macOS TTS. Trigger: remotion video/mp4/generate video from code/react animation/video composition/cantonese 粵語"
-version: 1.9.0
+version: 1.10.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -43,6 +43,8 @@ Generate a content-rich Cantonese voiceover MP4 from a script. The pipeline:
 > 每個步驟完成後，必須有實質產出（檔案、程式碼、數據）才能進入下一步。
 
 > **⚠️ Theme-based scene architecture causes "static and monotonic" video (2026-05-29 用家投訴).** Using generic `NewsScene`/`AngerScene` for ALL segments with same theme means every segment looks identical. The correct architecture is **23 unique per-segment scene components** (Scene0..Scene22), each with content-specific animations — not a shared SceneForTheme with a switch/case over generic themes. Every segment must have its OWN visual scene reflecting its SPECIFIC content.
+
+> **✅ Single data source architecture (2026-05-30):** SEGMENTS[] array contains ALL properties (text, durF, theme, startF) for each scene. SCENE_MAP dynamic routing: `SEGMENTS.map((seg, fi) => <Scene key={fi} {...{seg, fi}} />)`. All scenes receive `{seg, fi}` props and read `seg.text` dynamically — no hardcoded text/images in JSX.
 
 ```
 Step 0 → Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6
@@ -826,38 +828,38 @@ npx remotion render MyComp --frames=0-0 out/preview --log=error 2>&1
 ffmpeg -y -ss 0 -i out/preview.mp4 -frames:v 1 -q:v 2 out/preview.jpg 2>&1
 ```
 
-### ⚠️ Color Scheme — NO RED (2026-05-30 User Mandate)
+### ⚠️ Color Scheme — Warm Colors Only (2026-05-30 User Mandate)
 
-> **"不要紅色"** (2026-05-30) — User explicitly rejected ALL red. Red is banned from every layer.
-> Banned: `#dc2626`, `#ef4444`, `#991b1b`, `rgba(220,38,38,*)`, `rgba(239,68,68,*)`
+> **"顏色要暖色" + "我意思是背景色"** (2026-05-30) — User explicitly rejected cool/dark colors. All scenes must use warm palette.
+> Warm BG requirement: `#0a0000` → `#2a1408` (warm dark brown), `#0d1117` → `#5c3317` (warm mid brown)
 
-**Mandatory palette:**
-- **Emerald** `#10b981` — safety, life, go, news, memorial
-- **Amber** `#f59e0b` — warning, caution, speed, anger, danger
-- **Periwinkle** `#818cf8` — speaker, legal, infrastructure
-- **Sepia** `#8b7355` — past, memorial, historical
-- **Dark BG** `#0a0000` → `#0d1117` (dark backgrounds only)
+**Mandatory warm palette:**
+- **AMBER** `#f59e0b` — primary accent, icons, strokes, highlights
+- **DARK** `#2a1408` — warm dark brown, scene backgrounds
+- **MID** `#5c3317` — warm medium brown, secondary backgrounds
+- **LIGHT** `#fef3c7` — warm cream, text, icon strokes
 
-**LIVE banner background:** `#065f46` (dark emerald) + white text — NOT `#dc2626`
-**Theme vignette:** Use `rgba(16,185,129,0.4)` (emerald) or `rgba(245,158,11,0.4)` (amber) — NOT red
-**SpeedGauge needle:** `#f59e0b` (amber) — NOT `#ef4444`
-**SpeedLines:** `rgba(59,130,246,0.6)` (blue) or `rgba(245,158,11,0.6)` (amber)
+**Road stroke:** `#f59e0b` (amber) — NOT `#3b82f6` (blue)
+**ZebraCrossing stripes:** `#f59e0b` (amber) — NOT white/black
+**LIVE banner background:** `#78350f` (warm amber dark) + cream text
+**Theme vignette:** Use `rgba(245,158,11,0.3)` (amber) — warm glow over warm BG
 
-### ⚠️ Visual Metaphor — Zebra ≠ Crosswalk
+### ⚠️ Visual Metaphor — Crosswalk Stripes, NOT Zebra Animal
 
 > User caught: "斑馬線和斑馬沒關係" — The zebra (animal) crossing guard icon is semantically wrong for crosswalk (zebra crossing). Use actual crosswalk stripe patterns, pedestrian icons, or road marking visuals.
 
-**Correct crosswalk visuals:**
-- White/black diagonal stripe patterns (actual zebra crossing markings)
+**Correct crosswalk visuals (warm colors):**
+- Amber/cream diagonal stripe patterns (actual zebra crossing markings with warm palette)
 - Pedestrian walking icon 🚶
-- Road edge markings
+- Road edge markings with amber strokes
 - NO zebra animal 🦓 imagery
+- NO cool blue/red color schemes
 
-**If depicting road markings:**
+**Crosswalk stripes (warm palette):**
 ```tsx
-// Diagonal crosswalk stripes as background pattern
+// Amber zebra crossing stripes
 <div style={{
-  background: "repeating-linear-gradient(45deg, #fff 0px, #fff 20px, transparent 20px, transparent 40px)",
+  background: "repeating-linear-gradient(45deg, #f59e0b 0px, #f59e0b 20px, #fef3c7 20px, #fef3c7 40px)",
   opacity: 0.15,
 }} />
 ```
@@ -900,6 +902,11 @@ opacity: interpolate(auroraProgress, [0, 0.3, 1], [0, 0.3, 0.5], {extrapolateRig
 - Not just "1 image + 2-3 divs" — scenes should have 5-8+ distinct animated elements
 - Per-scene unique styles (not copy-paste with just text changed)
 
+> ⚠️ **cfnew-ycat KV yx parsing bug — split(/[
+,]/) fix (2026-05-30).** KV `yx` stores IPs as `
+`-delimited multiline string, NOT comma-separated. `split(',')` only splits on `,` so the entire string becomes one item with no `#` delimiters. Fix: `split(/[
+,]/)` on both plain.js line 438 and cfnew-ycat-deploy/plain.js line 7185. Deployed version `c74ea3a1`.
+
 ## JSX Richness Standard — Target 100+ Lines Per Scene
 
 > **"jsx和動畫都太少了"** (2026-05-30) — Even 26 divs per scene was insufficient. User wants maximum visual richness.
@@ -913,12 +920,14 @@ opacity: interpolate(auroraProgress, [0, 0.3, 1], [0, 0.3, 0.5], {extrapolateRig
 - Per-scene unique styles (not copy-paste with just text changed)
 - Every scene must have its OWN visual identity — news/anger/memorial/speed/legal/closing all look DIFFERENT
 
-**Color palette (NO RED):**
-- Primary accent: `#10b981` (emerald green) — safety, life, positive actions
-- Secondary: `#f59e0b` (amber) — warning, caution, speed, anger
-- Speaker/purple: `#c084fc` (y_cat purple) — expert segments
-- Sepia: `#8b7355` — historical/past segments
-- Muted: `#6b7280` — infrastructure/infrastructure
+**Color palette (WARM only):**
+- Primary accent: `#f59e0b` (amber) — everything: icons, roads, stripes, highlights
+- Background dark: `#2a1408` (warm dark brown)
+- Background mid: `#5c3317` (warm medium brown)
+- Text/highlights: `#fef3c7` (warm cream) — NOT white
+- Road/vehicle elements: `#f59e0b` stroke on warm BG
+
+**Banned:** cool blue `#3b82f6`, emerald `#10b981`, periwinkle `#818cf8`, sepia `#8b7355`
 
 **JSX-only visual richness (when AI image generation is rejected):**
 > ⚠️ **SVG icon libraries + custom SVG components = viable alternative to AI images (2026-05-30).** User rejected AI image generation but complained "行人、馬路、什麼都沒有" — JSX-only geometric animations were insufficient. Solution: use npm-installed Lucide React icons + custom inline SVG components for realistic visuals (cars, pedestrians, roads, crosswalk stripes).
