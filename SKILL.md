@@ -1,7 +1,7 @@
 ---
 name: remotion-video
 description: "Generate a Cantonese voiceover MP4 video from a script using Remotion + macOS TTS. Trigger: remotion video/mp4/generate video from code/react animation/video composition/cantonese 粵語"
-version: 2.0.0
+version: 2.1.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -14,7 +14,7 @@ metadata:
 
 ## 🛑 絕對鐵則 (CRITICAL RULES)
 1. **嚴禁跳步**：必須嚴格遵守 Step 1 至 Step 7 的順序，未輸出當前步驟的驗證結果前，絕對不允許進入下一步。
-2. **獨立場景原則**：必須為每一個段落建立獨立的組件（`Scene0` 到 `Scene22`），**嚴禁**使用 `switch/case` 搭配通用範本（如 `SceneForTheme`）。
+2. **獨立場場景原則**：必須為每一個段落建立獨立的組件（`Scene0` 到 `Scene22`），**嚴禁**使用 `switch/case` 搭配通用範本（如 `SceneForTheme`）。
 3. **暖色調強制令 (Warm Colors Only)**：僅允許使用 Amber (`#f59e0b`)、Warm Dark (`#2a1408`)、Mid Brown (`#5c3317`) 與 Cream (`#fef3c7`)。**嚴禁**使用純紅、純藍或冷色調。
 4. **極致視覺豐富度 (JSX Richness)**：每一個 Scene 必須達到 **100 行以上的 JSX 代碼**，且包含至少 6 種動態視覺元素。
 5. **強制 SVG 動畫**：除非明確指定使用實景圖片，否則必須大量調用專屬 SVG 組件（如 `<Road/>`, `<CarSVG/>`），且其座標必須綁定 `interpolate` 動畫。
@@ -23,34 +23,40 @@ metadata:
 
 ## 執行流程 (EXECUTION WORKFLOW)
 
-### Step 1: 腳本視覺規劃 (Planning & Mapping)
-讀取腳本，為所有段落 (Segments) 定義視覺主題與圖片。
+### Step 1: 腳本接收與本地存儲 (Script Initialization & Storage)
+收到用戶提供的文字腳本後，第一時間必須將完整內容物理性寫入本地檔案，建立單一事實來源 (Single Source of Truth)。
+1. 將完整的腳本文字寫入 `/tmp/remotion-demo/script.txt`。
+2. 後續所有的規劃、音頻生成與字幕拆解，皆必須嚴格讀取此檔案，**嚴禁依賴對話歷史的記憶**。
+> ✅ **Step 1 檢查卡點**：執行 `cat /tmp/remotion-demo/script.txt` 確認檔案已建立，且內容與用戶提供的腳本完全一致。
+
+### Step 2: 腳本視覺規劃 (Planning & Mapping)
+讀取 `/tmp/remotion-demo/script.txt` 內的腳本，為所有段落 (Segments) 定義視覺主題與對應資源。
 1. 確認 `THEMES` 陣列長度必須與 `SEGMENTS` 完全一致（不能多也不能少）。
 2. 主題必須與內容語義匹配（例如：`speed` 配馬路，`speaker` 配訪談）。
 3. 確保 `SEGMENT_IMAGES` 覆蓋所有段落。
-> ✅ **Step 1 檢查卡點**：執行 Python 腳本驗證 `len(THEMES) == len(SEGMENTS)`。
+> ✅ **Step 2 檢查卡點**：執行 Python 腳本驗證 `len(THEMES) == len(SEGMENTS)`。
 
-### Step 2: 音頻環境重置 (Audio Cleanup)
+### Step 3: 音頻環境重置 (Audio Cleanup)
 清除上一次生成的殘留檔案，防止污染。
 1. 執行：`rm -f /tmp/remotion-demo/public/audio/seg_*.m4a`
 2. 確認目錄內只剩下 `.gitkeep` 等非 `seg_` 檔案。
-> ✅ **Step 2 檢查卡點**：確認 `/tmp/remotion-demo/public/audio/` 內無舊音檔。
+> ✅ **Step 3 檢查卡點**：確認 `/tmp/remotion-demo/public/audio/` 內無舊音檔。
 
-### Step 3: 音頻生成 (Audio Generation)
-生成粵語 TTS 音檔。
+### Step 4: 音頻生成 (Audio Generation)
+依據 `/tmp/remotion-demo/script.txt` 內容，生成粵語 TTS 音檔。
 1. 執行：`cd /tmp/remotion-demo && python gen_audio.py`
 2. 確保生成 Y (Male) 與 M (Female) 雙版本音軌。
-> ✅ **Step 3 檢查卡點**：執行 `ls -la public/audio/ | grep "\.m4a" | wc -l`，確認檔案數量符合段落數。
+> ✅ **Step 4 檢查卡點**：執行 `ls -la public/audio/ | grep "\.m4a" | wc -l`，確認檔案數量符合腳本的段落數。
 
-### Step 4: 時間軸分析與對齊 (Timing Synchronization)
+### Step 5: 時間軸分析與對齊 (Timing Synchronization)
 計算每個段落的精確影格數 (durF) 與起始點 (startF)。
 1. 使用 `ffprobe` 讀取每個 `.m4a` 的精確秒數（嚴禁使用 `afinfo`）。
 2. 計算公式：`durF = ceil(duration * 30)`。
 3. 更新 `Composition.tsx` 內的 `SEGMENTS` 陣列。
 4. 更新 `Root.tsx` 中的 `<Composition durationInFrames={totalFrames} />`。
-> ✅ **Step 4 檢查卡點**：列印出所有 SEGMENTS 的 `durF` 總和，確認等於 `totalFrames`。
+> ✅ **Step 5 檢查卡點**：列印出所有 SEGMENTS 的 `durF` 總和，確認等於 `totalFrames`。
 
-### Step 5: 分批撰寫場景代碼 (Chunked JSX Generation)
+### Step 6: 分批撰寫場景代碼 (Chunked JSX Generation)
 **注意：為了防止 Context 丟失，此步驟必須分批執行！每批最多生成 5 個 Scene。**
 1. **Scene 結構要求**：
    * 呼叫 `useCurrentFrame()`。
@@ -60,16 +66,16 @@ metadata:
    * **Layer 4+**: 該主題專屬的 SVG 動畫組件 (如 `<SpeedGauge/>`, `<ZebraCrossing/>`)。
 2. 寫入 `Composition.tsx`，並將該 Scene 加入 `SceneComponents` 陣列。
 3. 分批執行（例如先寫 Scene0~4，等待用戶確認「繼續」後再寫 Scene5~9）。
-> ✅ **Step 5 檢查卡點**：使用 Python 正則表達式檢查每個 `SceneX` 的 `<div` 與 `<svg` 總數量是否大於 6，且代碼行數符合標準。
+> ✅ **Step 6 檢查卡點**：使用 Python 正則表達式檢查每個 `SceneX` 的 `<div` 與 `<svg` 總數量是否大於 6，且代碼行數符合標準。
 
-### Step 6: 渲染前終極審計 (Pre-Render Audit)
+### Step 7: 渲染前終極審計 (Pre-Render Audit)
 在執行渲染前，必須自我檢查代碼健康度。
 1. 執行 `npx tsc --noEmit` 確保無語法與型別錯誤。
 2. 確認沒有殘留的 `require("remotion")`，全部改用 ES6 `import`。
 3. 檢查 `Composition.tsx` 中是否將預設匯出放在檔案頂端：`export default function MyComp() {...}`，防止 esbuild 崩潰。
-> ✅ **Step 6 檢查卡點**：無 TypeScript Error，且 SVG Audit Script 全數顯示 `✅`。
+> ✅ **Step 7 檢查卡點**：無 TypeScript Error，且 SVG Audit Script 全數顯示 `✅`。
 
-### Step 7: 緩存清除與交付 (Render & Deliver)
+### Step 8: 緩存清除與交付 (Render & Deliver)
 強制清除所有快取，生成全新影片。
 1. 執行嚴格清理：
 ```bash
@@ -83,7 +89,7 @@ mkdir -p out
 ffmpeg -y -i out/MyComp.mp4 -vcodec libx264 -crf 28 -preset fast -vf "scale=1280:720" -c:a copy out/MyComp_compressed.mp4
 ```
 4. 交付影片至 Telegram。
-> ✅ **Step 7 檢查卡點**：確認輸出的 .mp4 檔案大小合理（>10MB），並發送。
+> ✅ **Step 8 檢查卡點**：確認輸出的 .mp4 檔案大小合理（>10MB），並發送。
 
 ---
 
